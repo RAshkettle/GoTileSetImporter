@@ -14,8 +14,9 @@ import (
 //GameMap holds all the information on our level
 //Note also that the tileset must be an embedded tileset
 type GameMap struct {
-	LevelMap *tmx.Map
-	TileSet  *TileSetInfo //The parser seems to only support a single tileset per map.
+	LevelMap  *tmx.Map
+	TileSet   *TileSetInfo //The parser seems to only support a single tileset per map.
+	Colliders []image.Rectangle
 }
 
 //TileSetInfo is the information necessary to pull the tileset for the map
@@ -41,6 +42,7 @@ func LoadGameMap(pathToMap string, mapName string, tilesetName string) *GameMap 
 	tilesetPath := path.Join(pathToMap, tilesetName)
 	g.LevelMap = myMap
 	g.TileSet = newTilesetInfo(myMap, tilesetPath)
+	g.Colliders = getColliders(g)
 
 	return &g
 }
@@ -60,6 +62,29 @@ func newTilesetInfo(myMap *tmx.Map, tileset string) *TileSetInfo {
 	return &tsi
 }
 
+func getColliders(g GameMap) []image.Rectangle {
+	ret := make([]image.Rectangle, 0)
+	for _, layer := range g.LevelMap.Layers {
+		if layer.Name != "Collision" {
+			continue
+		}
+		for row := 0; row < g.LevelMap.Height; row++ {
+			for column := 0; column < g.LevelMap.Width; column++ {
+				if layer.DecodedTiles[row*g.LevelMap.Width+column].Tileset != nil {
+					x, y := column*g.LevelMap.TileWidth, row*g.LevelMap.TileHeight
+					x2, y2 := x+g.TileSet.TileWidth, y+g.TileSet.TileHeight
+					r := image.Rect(x, y, x2, y2)
+					ret = append(ret, r)
+
+				}
+
+			}
+
+		}
+	}
+	return ret
+}
+
 //Draw draws the Game Map one layer at a time from 0 up
 func (g *GameMap) Draw(screen *ebiten.Image) {
 	for index := range g.LevelMap.Layers {
@@ -70,6 +95,9 @@ func (g *GameMap) Draw(screen *ebiten.Image) {
 //Draw is called each draw cycle and is where we will blit.
 func drawLayer(gm *GameMap, layerNumber int, screen *ebiten.Image) {
 	floorLayer := gm.LevelMap.Layers[layerNumber]
+	if floorLayer.Name == "Collision" {
+		return
+	}
 	mapHeight, mapWidth := gm.LevelMap.Height, gm.LevelMap.Width
 
 	//Optimize to only draw what's in the viewing window -- That will come later
